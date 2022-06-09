@@ -1,6 +1,7 @@
 package com.example.barcodescanner.screens
 
 import android.Manifest
+import android.media.MediaPlayer
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.Toast
@@ -9,7 +10,6 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
@@ -20,7 +20,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -36,7 +35,6 @@ import com.example.barcodescanner.data.remote.dto.LocationResponse
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.common.util.concurrent.ListenableFuture
-import io.ktor.client.statement.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.GlobalScope
@@ -73,6 +71,7 @@ fun HomeScreen() {
 @Composable
 fun CameraPreview() {
 
+    var mediaPlayer:MediaPlayer?= null
     //get json
     val service = LocationService.create()
     val posts = produceState<List<LocationResponse>>(
@@ -82,7 +81,7 @@ fun CameraPreview() {
         }
     )
 //selected index dropmenuItem
-    var  seletedItemDropMenuIndex  = remember { "" }
+    var  seletedIndex  by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -94,7 +93,8 @@ fun CameraPreview() {
     //drop down menu
     var expanded by remember { mutableStateOf(false) }
     //val suggestions = listOf("Item1","Item2","Item3")
-    val suggestions = posts.value
+    val locations = posts.value
+    Log.d("TAG3",locations.toString())
     var selectedText by remember { mutableStateOf("") }
 
     var textfieldSize by remember { mutableStateOf(Size.Zero)}
@@ -145,6 +145,23 @@ fun CameraPreview() {
                                 barCodeVal.value = barcodeValue
                                 barcodeText =  barcodeValue
                                 Toast.makeText(context, barcodeValue, Toast.LENGTH_SHORT).show()
+
+                                if(seletedIndex.isNotEmpty()) {
+                                    GlobalScope.launch(Dispatchers.Main) {
+                                        val response: LocationResponse? =
+                                            service.createLocation(
+                                                LocationRequest(
+                                                    barcodeText,
+                                                    seletedIndex
+                                                )
+                                            )
+                                        Toast.makeText(
+                                            context,
+                                            response?.toString() ?: "NO DATA",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
                             }
                         }
                     }
@@ -175,14 +192,14 @@ fun CameraPreview() {
         OutlinedTextField(
             placeholder = { Text(text = "바코드 입력해주세요.") },
             label = { Text(text = "코드") },
-            value = barcodeText, onValueChange = {
-            barcodeText = it
-        })
+            value = barcodeText,
+            onValueChange = { barcodeText = it }
+        )
 
         //drop down menu
         Column() {
             OutlinedTextField(
-
+                readOnly = true,
                 value = selectedText,
                 onValueChange = { selectedText = it },
                 modifier = Modifier
@@ -202,17 +219,19 @@ fun CameraPreview() {
                 modifier = Modifier
                     .width(with(LocalDensity.current){textfieldSize.width.toDp()})
             ) {
-//                suggestions.forEach { label ->
+
+//                suggestions.forEachIndexed { index,locationResponse ->
 //                    DropdownMenuItem(onClick = {
-//                        selectedText = label
+//                        seletedItemDropMenuIndex = index
+//                        selectedText = locationResponse.position_name
 //                        expanded = false
 //                    }) {
-//                        Text(text = label)
+//                        Text(text = locationResponse.position_name)
 //                    }
 //                }
-                suggestions.forEach { locationResponse ->
+                locations.forEach{ locationResponse ->
                     DropdownMenuItem(onClick = {
-                        seletedItemDropMenuIndex = locationResponse.position_id
+                        seletedIndex = locationResponse.position_id
                         selectedText = locationResponse.position_name
                         expanded = false
                     }) {
@@ -222,23 +241,24 @@ fun CameraPreview() {
             }
             Box(modifier = Modifier.align(Alignment.End)) {
                 Button(
-                    onClick = {
-
+                    onClick =
+                    {
                         GlobalScope.launch (Dispatchers.Main) {
-
                             val response: LocationResponse? =
-                                service.createLocation(LocationRequest(barcodeText, seletedItemDropMenuIndex))
-                            Toast.makeText(context, response?.toString() ?: "NO DATA", Toast.LENGTH_SHORT).show()
+                                service.createLocation(LocationRequest(barcodeText, seletedIndex))
+                                Toast.makeText(context, response?.toString() ?: "NO DATA", Toast.LENGTH_SHORT).show()
                         }
-
-                              },
+                    },
                     modifier = Modifier.align(Alignment.TopEnd))
                 {
                     Text("SAVE")
                 }
             }
-
-
         }
     }
+
+
 }
+
+
+
